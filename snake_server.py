@@ -290,7 +290,7 @@ def get_apples():
 
 if __name__ == '__main__':
    logging.basicConfig(format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
-                    level=logging.DEBUG)
+                    level=logging.INFO)
    Timer(1,proc_room_1s).start()
    app.run(debug=False)
    
