@@ -8,28 +8,28 @@ import logging
 
 app = Flask(__name__)
 app.config['SECRET_KEY']=os.urandom(24)
-room_list=[]
+game_data=[]
 
 def proc_room_1s():
    logging.debug('BEGIN preocess room')
-   for room in room_list:
+   for room in game_data:
       if room['started']<=0:
-         logging.info('room not started, player: '+str(room['player']))
+         logging.debug('room not started, player: ' + str(room['player']))
          continue
       room['started'] = room['started']+1
       if room['started'] > 600:
-         logging.info('room game over, player: '+str(room['player']))
+         logging.debug('room game over, player: ' + str(room['player']))
          close_room(room)
       else:
-         logging.info('room run normally, player: '+str(room['player']))
+         logging.debug('room run normally, player: ' + str(room['player']))
          grow_apples(room)
-         logging.debug('all apples: '+str(room['map']['apples']))
+         logging.debug('all apples: ' + str(room['map']['apples']))
    Timer(1,proc_room_1s).start()
    logging.debug('END preocess room')
 
 
 def close_room_exe(room):
-   logging.info('room closed, player: '+str(room['player']))
+   logging.info('room closed, player: ' + str(room['player']))
    room.clear()
    del(room)
 
@@ -83,7 +83,6 @@ def close_room(room):
    Timer(10,close_room_exe).start()
 
 def start_room(user):
-   logging.info("new room create")
    room = {}
    room['num_player'] = 1
    room['started'] = 0
@@ -91,8 +90,9 @@ def start_room(user):
    room['map']={}
    room['map']['apples']=[]
    room['map']['walls']=[]
-   room_list.append(room)
-   room_index = room_list.index(room)
+   game_data.append(room)
+   room_index = game_data.index(room)
+   logging.info("new room create, index: " + str(room_index))
    return room_index
 
 def join_room(room,user):
@@ -103,14 +103,27 @@ def join_room(room,user):
    room['player'].append(user)
 
 def join_game(user):
-   for room in room_list:
+   for room in game_data:
       if room.get('started') == 0:
          if room.get('num_player') < 2:
             join_room(room,user)
-            return room_list.index(room)
+            return game_data.index(room)
    else:
       room_index = start_room(user)
       return room_index
+
+def check_player(session):
+   if session.get('uuid') == None:
+      logging.warn('player not join server')
+      return 'clierr'
+   elif session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'clierr'
+   elif session['room'] > len(game_data):
+      logging.critical('room index higher than list, uuid: ' + str(session['uuid'])+',room_index: ' + str(session['room']))
+      return 'inerr'
+   else:
+      return 'fine'
 
 @app.before_request
 def make_session_permanent():
@@ -123,27 +136,33 @@ def reg_user(name):
    user = {'uuid':session['uuid'],'name':name,'score':0,'un_get_wall_count':0,'snake':{'body':[],'len':3,'head':{}}}
    room = join_game(user)
    session['room'] = room 
-   logging.info('new player join server, uuid: '+str(user['uuid'])+', name: '+user['name'])
-   logging.info('room info: '+room)
+   logging.info('new player join server, uuid: ' + str(user['uuid'])+', name: ' + str(user['name']))
+   logging.info('room index: ' + str(room))
    return str(session['uuid'])
 
-@app.route('/updaye/score',methods = ['POST'])
+@app.route('/update/score',methods = ['POST'])
 def update_score():
-   room = room_list[session.get('room')]
+   res = check_player(session)
+   if res != 'fine':
+      return res
+   room = game_data[session.get('room')]
    if room != None: 
       user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
       user['score'] = request.json['data']['score']
 
-      logging.info('player score updated, uuid: '+session['uuid']+', score: '+user['score'])
-      logging.debug('all player: '+room['player'])
+      logging.info('player score updated, uuid: ' + str(session['uuid'])+', score: ' + str(user['score']))
+      logging.debug('all player: ' + str(room['player']))
 
       return 'success'
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/update/snake',methods = ['POST'])
 def update_snake():
-   room = room_list[session.get('room')]
+   res = check_player(session)
+   if res != 'fine':
+      return res
+   room = game_data[session.get('room')]
    if room != None: 
       snake_body = request.json['body']
       snake_head = request.json['head']
@@ -154,113 +173,138 @@ def update_snake():
       user['snake']['head'] = snake_head
       user['snake']['len'] = snake_len
 
-      logging.info('player snake moved, uuid: '+session['uuid'])
-      logging.debug('snakes: '+user['snake'])
-      logging.debug('all wall: '+room['map']['walls'])
+      logging.info('player snake moved, uuid: ' + str(session['uuid']))
+      logging.debug('snakes: ' + str(user['snake']))
+      logging.debug('all wall: ' + str(room['map']['walls']))
 
       if check_crash(room,user):
-         logging.info('user snake died, uuid: '+session['uuid'])
+         logging.info('user snake died, uuid: ' + str(session['uuid']))
          return 'die'
       elif check_eat(room,user):
-         logging.info('user snake eats apple, uuid: '+session['uuid'])
+         logging.info('user snake eats apple, uuid: ' + str(session['uuid']))
          return 'eat'
       else:
          return 'success'
    else:
-      return 'over'
+      return 'inerr'
    
 @app.route('/update/wall',methods = ['POST'])
 def update_wall():
-   room = room_list[session.get('room')]
+   res = check_player(session)
+   if res != 'fine':
+      return res
+   room = game_data[session.get('room')]
    if room != None: 
       wall = request.json['wall']
       room['map']['walls'].append({'x':wall['x'],'y':wall['y']})
-      room['map']['apples'].remove({'x':wall['x'],'y':wall['y']})
+      if room['map']['apples'].count({'x':wall['x'],'y':wall['y']}) > 0:
+         room['map']['apples'].remove({'x':wall['x'],'y':wall['y']})
 
-      logging.info('wall placed, uuid: '+session['uuid']+',x: '+wall['x']+',y: '+wall['y'])
-      logging.debug('all wall: '+room['map']['walls'])
+      logging.info('wall placed, uuid: ' + str(session['uuid'])+',x: ' + str(wall['x'])+',y: ' + str(wall['y']))
+      logging.debug('all wall: ' + str(room['map']['walls']))
 
       for user in room['player']:
          user['un_get_wall_count'] += 1
       return 'success'
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/get/status')
 def get_status():
+   res = check_player(session)
+   if res != 'fine':
+      return res
    game_status={}
-   room = room_list[session.get('room')]
+   room = game_data[session.get('room')]
    if room != None: 
       game_status['time'] = room['started']
+      logging.info('player get simple status, uuid: ' + str(session['uuid']))
+      logging.debug('status data: ' + str(game_status))
       return jsonify(game_status)
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/debug')
 def debug():
-   return jsonify(room_list)
+   logging.debug(str(game_data))
+   return jsonify(game_data)
 
 @app.route('/get/statusfull')
 def get_status_f():
+   res = check_player(session)
+   if res != 'fine':
+      return res
    game_status={}
-   room = room_list[session.get('room')]
+   room = game_data[session.get('room')]
    if room != None: 
       game_status['time'] = room['started']
       game_status['player'] = []
       for user in room['player']:
          game_status['player'].append({'uuid':user['uuid'],
                         'name':user['name']})
+      logging.info('player get fullly status, uuid: ' + str(session['uuid']))
+      logging.debug('status data: ' + str(game_status))
       return jsonify(game_status)
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/get/snakes')
 def get_snakes():
+   res = check_player(session)
+   if res != 'fine':
+      return res
    snakes=[]
-   room = room_list[session.get('room')]
+   room = game_data[session.get('room')]
    if room != None:
 
-      logging.info('try to get snakes data, uuid: '+session['uuid'])
-      logging.debug('all player data: '+room['player'])
+      logging.info('try to get snakes data, uuid: ' + str(session['uuid']))
+      logging.debug('all player data: ' + str(room['player']))
 
-      for user in room['players']:
+      for user in room['player']:
          snakes.append({'uuid':user['uuid'],
                         'body':user['snake']['body'],
                         'len':user['snake']['len'],
                         'head':user['snake']['head']})
 
-      logging.debug('return data: '+snakes)      
+      logging.debug('return data: ' + str(snakes))  
       return jsonify(snakes)
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/get/scores')
 def get_scores():
+   res = check_player(session)
+   if res != 'fine':
+      return res
    scores=[]
-   room = room_list[session.get('room')]
+   room = game_data[session.get('room')]
    if room != None:
 
-      logging.info('try to get score data, uuid: '+session['uuid'])
-      logging.debug('all player data: '+room['player'])
+      logging.info('try to get score data, uuid: ' + str(session['uuid']))
+      logging.debug('all player data: ' + str(room['player']))
 
       for user in room['player']:
          scores.append({'uuid':user['uuid'],
                         'score':user['score']})
 
-      logging.debug('return data: '+scores)
+      logging.debug('return data: ' + str(scores))
       return jsonify(scores)
    else:
-      return 'over'
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'inerr'
 
 @app.route('/get/walls')
 def get_walls():
-   room = room_list[session.get('room')]
+   res = check_player(session)
+   if res != 'fine':
+      return res
+   room = game_data[session.get('room')]
    if room != None:
       wall_data=[]
-      user = [user for user in room['player'] if user['uuid'] == session['uuid']]
+      user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
 
-      logging.info('try to get wall data, uuid: '+session['uuid'])
-      logging.debug('all wall: '+room['map']['walls'])
+      logging.info('try to get wall data, uuid: ' + str(session['uuid']))
+      logging.debug('all wall: ' + str(room['map']['walls']))
 
       if user['un_get_wall_count'] > 0:
          un_get_wall = room['map']['walls'][user['un_get_wall_count']:]
@@ -268,29 +312,32 @@ def get_walls():
             user['un_get_wall_count'] -= 1
             wall_data.append({'x':wall['x'],'y':wall['y']})
 
-         logging.debug('return data: '+wall_data)
+         logging.debug('return data: ' + str(wall_data))
          return jsonify(wall_data)
       else:
          return 'empty'
    else:
-       return 'over'
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'inerr'
 
 @app.route('/get/apples')
 def get_apples():
-   room = room_list[session.get('room')]
-   print(room)
+   res = check_player(session)
+   if res != 'fine':
+      return res
+   room = game_data[session.get('room')]
    if room != None:
 
-      logging.info('try to get apple data, uuid: '+session['uuid'])
-      logging.debug('all apples: '+room['map']['apples'])
+      logging.info('try to get apple data, uuid: ' + str(session['uuid']))
+      logging.debug('all apples: ' + str(room['map']['apples']))
 
       return jsonify(room['map']['apples'])
    else:
-      return 'over'
+      return 'inerr'
 
 if __name__ == '__main__':
    logging.basicConfig(format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
-                    level=logging.DEBUG)
+                    level=logging.INFO)
    Timer(1,proc_room_1s).start()
    app.run(debug=False)
    
