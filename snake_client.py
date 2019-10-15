@@ -1,5 +1,8 @@
 import requests
 import random
+import json
+import copy
+import logging
 
 class Game_model:
   server_url=""
@@ -25,16 +28,16 @@ class Game_model:
     direction = random.randint(1,4)
     flag = True
     while(flag):
-      flag = True
+      flag = False
       head_x = random.randint(20,80)
       head_y = random.randint(20,80)
       for player in self.players:
         snake_head = player['snake']['head']
         if abs(head_x - snake_head['x'])+abs(head_y - snake_head['y']) <= 15:
-          flag = False
-      for wall in self.game_map['wall']:
+          flag = True
+      for wall in self.game_map['walls']:
         if abs(head_x - wall['x'])+abs(head_y - wall['y']) <= 7:
-          flag = False
+          flag = True
 
     self.user['snake']['head'] = {'x':head_x,'y':head_y}
 
@@ -51,8 +54,13 @@ class Game_model:
       dir_x = 0
       dir_y = -1   
 
+    self.user['snake']['body'] = []
     for i in range(2):
       self.user['snake']['body'].append({'x':head_x+(i+1)*dir_x,'y':head_y+(i+1)*dir_y})
+
+    self.user['snake']['len'] = 3
+
+    print("snake birthed")
 
     res = self._upload_snake()
     if res == 0:
@@ -79,14 +87,17 @@ class Game_model:
       mov_x=1
       mov_y=0
 
-    snake_tail = snake['body'][-1]
+    snake_tail = copy.deepcopy(snake['body'][-1])
 
-    for i in range(snake['len']-1,1,-1):
-      snake['body'][i]=snake['body'][i-1]
+    for i in range(snake['len']-2,0,-1):
+      snake['body'][i]=copy.deepcopy(snake['body'][i-1])
 
-    snake['body'][0]=snake['head']
+    snake['body'][0]=copy.deepcopy(snake['head'])
+
     snake['head']['x'] += mov_x
     snake['head']['y'] += mov_y
+
+    print("moved success, direction = "+direction)
 
     res = self._upload_snake()
 
@@ -144,6 +155,7 @@ class Game_model:
     print("joining game.")
     res = self.req.get(url)
     if res.status_code == 200:
+      print("join success")
       self.user['uuid'] = res.text
       self.user['snake']={}
       self.user['score']=0
@@ -151,8 +163,10 @@ class Game_model:
       self.game_map['walls']=[]
       self.game_map['walls_count']=0
       self.game_map['apples']=[]
+      return {'res':'suc','data':{'uuid':self.user['uuid']}}
     else:
-      return 2
+      print("join fail")
+      return {'res':'com_fai','data':{}}
 
 
 
@@ -209,8 +223,9 @@ class Game_model:
 
   def _update_score(self):
     url = self.server_url + "/update/score"
+    print("uploading score data")
     score_data={'data':{'score':self.user['score']}}
-    res = self.req.post(url,data=score_data)
+    res = self.req.post(url,json=score_data)
     if res.status_code == 200:
       if res.text == 'success':
         return 0
@@ -222,12 +237,13 @@ class Game_model:
 
   def _upload_snake(self):
     url = self.server_url + "/update/snake"
+    print("uploading snake data")
     snake_data = {}
     snake_data['head'] = self.user['snake']['head']
     snake_data['body'] = self.user['snake']['body']
     snake_data['len'] = self.user['snake']['len']
-    print("uploading snake data")
-    res = self.req.post(url,data=snake_data)
+    print(snake_data)
+    res = self.req.post(url,json=snake_data)
     if res.status_code == 200:
       if res.text == 'eat':
         return 'e'
@@ -244,7 +260,9 @@ class Game_model:
   def _uploading_wall(self,wall):
     url = self.server_url + "/update/wall"
     print("uploading wall data")
-    res = self.req.post(url,data=wall)
+    wall_data={}
+    wall_data['wall']=wall
+    res = self.req.post(url,json=wall_data)
     if res.status_code == 200:
       if res.text == 'success':
         self.game_map['walls_count'] -= 1
@@ -348,5 +366,3 @@ class Game_model:
         return -1
     else:
       return 2
-
-game = Game_model("http://127.0.0.1:5000","test")
