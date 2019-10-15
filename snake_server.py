@@ -23,7 +23,7 @@ def proc_room_1s():
 
 def close_room_exe(room):
    room.clear()
-   room = None
+   del(room)
 
 def check_eat(room,user):
    if room['map']['apples'].count(user['snake']['head']) == 1:
@@ -131,10 +131,13 @@ def update_snake():
    if room != None: 
       snake_body = eval(request.form['body'])
       snake_head = eval(request.form['head'])
+      snake_len = eval(request.form['len'])
+
 
       user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
       user['snake']['body'] = snake_body
       user['snake']['head'] = snake_head
+      user['snake']['len'] = snake_len
 
       if check_crash(room,user):
          return 'die'
