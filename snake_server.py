@@ -129,6 +129,9 @@ def reg_user(name):
 
 @app.route('/updaye/score',methods = ['POST'])
 def update_score():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    room = room_list[session.get('room')]
    if room != None: 
       user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
@@ -139,10 +142,13 @@ def update_score():
 
       return 'success'
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/update/snake',methods = ['POST'])
 def update_snake():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    room = room_list[session.get('room')]
    if room != None: 
       snake_body = request.json['body']
@@ -167,10 +173,13 @@ def update_snake():
       else:
          return 'success'
    else:
-      return 'over'
+      return 'inerr'
    
 @app.route('/update/wall',methods = ['POST'])
 def update_wall():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    room = room_list[session.get('room')]
    if room != None: 
       wall = request.json['wall']
@@ -184,17 +193,20 @@ def update_wall():
          user['un_get_wall_count'] += 1
       return 'success'
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/get/status')
 def get_status():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    game_status={}
    room = room_list[session.get('room')]
    if room != None: 
       game_status['time'] = room['started']
       return jsonify(game_status)
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/debug')
 def debug():
@@ -202,6 +214,9 @@ def debug():
 
 @app.route('/get/statusfull')
 def get_status_f():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    game_status={}
    room = room_list[session.get('room')]
    if room != None: 
@@ -212,10 +227,13 @@ def get_status_f():
                         'name':user['name']})
       return jsonify(game_status)
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/get/snakes')
 def get_snakes():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    snakes=[]
    room = room_list[session.get('room')]
    if room != None:
@@ -232,10 +250,13 @@ def get_snakes():
       logging.debug('return data: ' + str(snakes))  
       return jsonify(snakes)
    else:
-      return 'over'
+      return 'inerr'
 
 @app.route('/get/scores')
 def get_scores():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    scores=[]
    room = room_list[session.get('room')]
    if room != None:
@@ -250,10 +271,14 @@ def get_scores():
       logging.debug('return data: ' + str(scores))
       return jsonify(scores)
    else:
-      return 'over'
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'inerr'
 
 @app.route('/get/walls')
 def get_walls():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    room = room_list[session.get('room')]
    if room != None:
       wall_data=[]
@@ -273,12 +298,15 @@ def get_walls():
       else:
          return 'empty'
    else:
-       return 'over'
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'inerr'
 
 @app.route('/get/apples')
 def get_apples():
+   if session.get('room') == None:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'over'
    room = room_list[session.get('room')]
-   print(room)
    if room != None:
 
       logging.info('try to get apple data, uuid: ' + str(session['uuid']))
@@ -286,7 +314,7 @@ def get_apples():
 
       return jsonify(room['map']['apples'])
    else:
-      return 'over'
+      return 'inerr'
 
 if __name__ == '__main__':
    logging.basicConfig(format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
