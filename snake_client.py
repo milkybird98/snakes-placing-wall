@@ -5,7 +5,6 @@ class Game_model:
   server_url=""
   user={}
   players=[]
-  player_count=0
   req = requests.Session()
   game_map={}
   started_time=0
@@ -15,6 +14,7 @@ class Game_model:
     self.user['name']=user_name
     self.user['snake']={}
     self.user['score']=0
+    self.started_time=0
     self.game_map['walls']=[]
     self.game_map['walls_count']=0
     self.game_map['apples']=[]
@@ -23,7 +23,7 @@ class Game_model:
 
   def birth_snake(self):
     direction = random.randint(1,4)
-    flag = False
+    flag = True
     while(flag):
       flag = True
       head_x = random.randint(20,80)
@@ -31,6 +31,9 @@ class Game_model:
       for player in self.players:
         snake_head = player['snake']['head']
         if abs(head_x - snake_head['x'])+abs(head_y - snake_head['y']) <= 15:
+          flag = False
+      for wall in self.game_map['wall']:
+        if abs(head_x - wall['x'])+abs(head_y - wall['y']) <= 7:
           flag = False
 
     self.user['snake']['head'] = {'x':head_x,'y':head_y}
@@ -49,9 +52,7 @@ class Game_model:
       dir_y = -1   
 
     for i in range(2):
-      body = []
-      body.append({'x':head_x+(i+1)*dir_x,'y':head_y+(i+1)*dir_y})
-      self.user['snake']['body'] = body
+      self.user['snake']['body'].append({'x':head_x+(i+1)*dir_x,'y':head_y+(i+1)*dir_y})
 
     res = self._upload_snake()
     if res == 0:
@@ -91,7 +92,7 @@ class Game_model:
 
     if res == 'e':
       snake['len'] += 1
-      self.user['score'] += 50*(1+len(self.game_map['walls'])*0.01)
+      self.user['score'] += 50*(0.95 ** self.game_map['walls_count'])
       snake['body'].append(snake_tail)
       self.game_map['walls_count'] += 10
       return {'res':'eat','data':{'pos':snake_tail,'socre':self.user['score']}}
@@ -109,15 +110,15 @@ class Game_model:
   def place_wall(self,direction):
     if direction == 'n':
       mov_x=0
-      mov_y=-1
+      mov_y=-2
     elif direction == 's':
       mov_x=0
-      mov_y=1
+      mov_y=2
     elif direction == 'w':
-      mov_x=-1
+      mov_x=-2
       mov_y=0
     elif direction == 'e':
-      mov_x=1
+      mov_x=2
       mov_y=0
 
     snake_h = self.user['snake']['head']
@@ -144,8 +145,27 @@ class Game_model:
     res = self.req.get(url)
     if res.status_code == 200:
       self.user['uuid'] = res.text
+      self.user['snake']={}
+      self.user['score']=0
+      self.started_time=0
+      self.game_map['walls']=[]
+      self.game_map['walls_count']=0
+      self.game_map['apples']=[]
     else:
       return 2
+
+
+
+  def wait_game_start(self):
+    while(self.started_time == 0):
+      res = self._get_status()
+      if res == -1:
+        return {'res':'over','data':{'socre':self.user['score']}}
+      elif res == 2:
+        return {'res':'com_fai','data':{}}
+
+    return {'res':'start','data':{}}
+
 
 
   def sync_world(self):
@@ -186,6 +206,7 @@ class Game_model:
       return {'res':'com_fai','data':{}}
 
 
+
   def _update_score(self):
     url = self.server_url + "/update/score"
     score_data={'data':{'score':self.user['score']}}
@@ -204,6 +225,7 @@ class Game_model:
     snake_data = {}
     snake_data['head'] = self.user['snake']['head']
     snake_data['body'] = self.user['snake']['body']
+    snake_data['len'] = self.user['snake']['len']
     print("uploading snake data")
     res = self.req.post(url,data=snake_data)
     if res.status_code == 200:
@@ -244,9 +266,10 @@ class Game_model:
         if self.started_time == 0:
           self.players.clear()
           for player in res_data.get('player'):
-            player['snake']={}
-            player['score']=0
-            self.players.append(player)
+            if player['uuid'] != self.user['uuid']:
+              player['snake']={}
+              player['score']=0
+              self.players.append(player)
         return 0
       elif res.text == 'over':
         return -1
