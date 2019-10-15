@@ -11,6 +11,8 @@ room_list=[]
 
 def proc_room_1s():
    for room in room_list:
+      if room['started']<=0:
+         return
       room['started'] = room['started']+1
       if room['started'] > 600:
          close_room(room)
@@ -75,7 +77,7 @@ def close_room(room):
 def start_room(user):
    room = {}
    room['num_player'] = 1
-   room['started'] = 1
+   room['started'] = 0
    room['player'] = [user]
    room['map']={}
    room['map']['apples']=[]
@@ -86,12 +88,14 @@ def start_room(user):
 
 def join_room(room,user):
    room['num_player'] = room['num_player']+1
+   if room['num_player'] == 8:
+      room['started'] == 1
    room['players'].append(user)
 
 def join_game(user):
    for room in room_list:
-      if room.get('started') > 0:
-         if room.get('num_player') <= 8:
+      if room.get('started') == 0:
+         if room.get('num_player') < 8:
             join_room(room,user)
             return room_list.index(room)
    else:
@@ -106,10 +110,20 @@ def make_session_permanent():
 @app.route('/join/<name>')
 def reg_user(name):
    session['uuid'] = uuid.uuid1()
-   user = {'uuid':session['uuid'],'name':name,'score':0,'snake':{'body':[],'len':3,'head':{}}}
+   user = {'uuid':session['uuid'],'name':name,'score':0,'un_get_wall_count':0,'snake':{'body':[],'len':3,'head':{}}}
    room = join_game(user)
    session['room'] = room 
-   return 'success'
+   return 'uuid'
+
+@app.route('/updaye/score',method = ['POST'])
+def update_score():
+   room = room_list[session.get('room')]
+   if room != None: 
+      user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
+      user['score'] = eval(request.form['data'])['score']
+      return 'success'
+   else:
+      return 'over'
 
 @app.route('/update/snake',methods = ['POST'])
 def update_snake():
@@ -138,6 +152,8 @@ def update_wall():
       wall = eval(request.form['wall'])
       room['map']['walls'].append({'x':wall['x'],'y':wall['y']})
       room['map']['apples'].remove({'x':wall['x'],'y':wall['y']})
+      for user in room['player']:
+         user['un_get_wall_count'] += 1
       return 'success'
    else:
       return 'over'
@@ -148,8 +164,20 @@ def get_status():
    room = room_list[session.get('room')]
    if room != None: 
       game_status['time'] = room['started']
-      game_status['count'] = len(room['player'])
-      game_status['user'] = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
+      return jsonify(game_status)
+   else:
+      return 'over'
+
+@app.route('/get/statusfull')
+def get_status_f():
+   game_status={}
+   room = room_list[session.get('room')]
+   if room != None: 
+      game_status['time'] = room['started']
+      game_status['player'] = []
+      for user in room['player']:
+         game_status['player'].append({'uuid':user['uuid'],
+                        'name':user['name']})
       return jsonify(game_status)
    else:
       return 'over'
@@ -159,8 +187,8 @@ def get_snakes():
    snakes=[]
    room = room_list[session.get('room')]
    if room != None:
-      for user in room:
-         snakes.append({'name':user['name'],
+      for user in room['players']:
+         snakes.append({'uuid':user['uuid'],
                         'body':user['snake']['body'],
                         'len':user['snake']['len'],
                         'head':user['snake']['head']})
@@ -174,7 +202,7 @@ def get_scores():
    room = room_list[session.get('room')]
    if room != None:
       for user in room['player']:
-         scores.append({'name':user['name'],
+         scores.append({'uuid':user['uuid'],
                         'score':user['score']})
       return jsonify(scores)
    else:
@@ -184,7 +212,16 @@ def get_scores():
 def get_walls():
    room = room_list[session.get('room')]
    if room != None:
-      return jsonify(room['map']['walls'])
+      wall_data=[]
+      user = [user for user in room['player'] if user['uuid'] == session['uuid']]
+      if user['un_get_wall_count'] > 0:
+         un_get_wall = room['map']['walls'][user['un_get_wall_count']:]
+         for wall in un_get_wall:
+            user['un_get_wall_count'] -= 1
+            wall_data.append({'x':wall['x'],'y':wall['y']})
+         return jsonify(wall_data)
+      else:
+         return 'empty'
    else:
        return 'over'
 
