@@ -4,24 +4,32 @@ import uuid
 from threading import Timer
 import os
 import random
+import logging
 
 app = Flask(__name__)
 app.config['SECRET_KEY']=os.urandom(24)
 room_list=[]
 
 def proc_room_1s():
+   logging.debug('BEGIN preocess room')
    for room in room_list:
       if room['started']<=0:
-         return
+         logging.info('room not started, player: '+str(room['player']))
+         continue
       room['started'] = room['started']+1
       if room['started'] > 600:
+         logging.info('room game over, player: '+str(room['player']))
          close_room(room)
       else:
+         logging.info('room run normally, player: '+str(room['player']))
          grow_apples(room)
+         logging.debug('all apples: '+str(room['map']['apples']))
    Timer(1,proc_room_1s).start()
+   logging.debug('END preocess room')
 
 
 def close_room_exe(room):
+   logging.info('room closed, player: '+str(room['player']))
    room.clear()
    del(room)
 
@@ -37,7 +45,7 @@ def check_crash(room,user):
    if room['map']['walls'].count(user['snake']['head']) == 1:
       user['snake']['len'] = -1
    
-   for other_player in user['player']:
+   for other_player in room['player']:
       if other_player['snake']['body'].count(user['snake']['head']) == 1:
          user['snake']['len'] = -1
          break         
@@ -71,10 +79,11 @@ def grow_apples(room):
    return
 
 def close_room(room):
-   room['started'] = 0
+   room['started'] = -1
    Timer(10,close_room_exe).start()
 
 def start_room(user):
+   logging.info("new room create")
    room = {}
    room['num_player'] = 1
    room['started'] = 0
@@ -88,14 +97,15 @@ def start_room(user):
 
 def join_room(room,user):
    room['num_player'] = room['num_player']+1
-   if room['num_player'] == 8:
-      room['started'] == 1
-   room['players'].append(user)
+   if room['num_player'] == 2:
+      logging.info("one room start game")
+      room['started'] = 1
+   room['player'].append(user)
 
 def join_game(user):
    for room in room_list:
       if room.get('started') == 0:
-         if room.get('num_player') < 8:
+         if room.get('num_player') < 2:
             join_room(room,user)
             return room_list.index(room)
    else:
@@ -113,14 +123,20 @@ def reg_user(name):
    user = {'uuid':session['uuid'],'name':name,'score':0,'un_get_wall_count':0,'snake':{'body':[],'len':3,'head':{}}}
    room = join_game(user)
    session['room'] = room 
-   return 'uuid'
+   logging.info('new player join server, uuid: '+str(user['uuid'])+', name: '+user['name'])
+   logging.info('room info: '+room)
+   return str(session['uuid'])
 
-@app.route('/updaye/score',method = ['POST'])
+@app.route('/updaye/score',methods = ['POST'])
 def update_score():
    room = room_list[session.get('room')]
    if room != None: 
       user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
-      user['score'] = eval(request.form['data'])['score']
+      user['score'] = request.json['data']['score']
+
+      logging.info('player score updated, uuid: '+session['uuid']+', score: '+user['score'])
+      logging.debug('all player: '+room['player'])
+
       return 'success'
    else:
       return 'over'
@@ -129,19 +145,24 @@ def update_score():
 def update_snake():
    room = room_list[session.get('room')]
    if room != None: 
-      snake_body = eval(request.form['body'])
-      snake_head = eval(request.form['head'])
-      snake_len = eval(request.form['len'])
-
+      snake_body = request.json['body']
+      snake_head = request.json['head']
+      snake_len = request.json['len']
 
       user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
       user['snake']['body'] = snake_body
       user['snake']['head'] = snake_head
       user['snake']['len'] = snake_len
 
+      logging.info('player snake moved, uuid: '+session['uuid'])
+      logging.debug('snakes: '+user['snake'])
+      logging.debug('all wall: '+room['map']['walls'])
+
       if check_crash(room,user):
+         logging.info('user snake died, uuid: '+session['uuid'])
          return 'die'
       elif check_eat(room,user):
+         logging.info('user snake eats apple, uuid: '+session['uuid'])
          return 'eat'
       else:
          return 'success'
@@ -152,9 +173,13 @@ def update_snake():
 def update_wall():
    room = room_list[session.get('room')]
    if room != None: 
-      wall = eval(request.form['wall'])
+      wall = request.json['wall']
       room['map']['walls'].append({'x':wall['x'],'y':wall['y']})
       room['map']['apples'].remove({'x':wall['x'],'y':wall['y']})
+
+      logging.info('wall placed, uuid: '+session['uuid']+',x: '+wall['x']+',y: '+wall['y'])
+      logging.debug('all wall: '+room['map']['walls'])
+
       for user in room['player']:
          user['un_get_wall_count'] += 1
       return 'success'
@@ -170,6 +195,10 @@ def get_status():
       return jsonify(game_status)
    else:
       return 'over'
+
+@app.route('/debug')
+def debug():
+   return jsonify(room_list)
 
 @app.route('/get/statusfull')
 def get_status_f():
@@ -190,11 +219,17 @@ def get_snakes():
    snakes=[]
    room = room_list[session.get('room')]
    if room != None:
+
+      logging.info('try to get snakes data, uuid: '+session['uuid'])
+      logging.debug('all player data: '+room['player'])
+
       for user in room['players']:
          snakes.append({'uuid':user['uuid'],
                         'body':user['snake']['body'],
                         'len':user['snake']['len'],
                         'head':user['snake']['head']})
+
+      logging.debug('return data: '+snakes)      
       return jsonify(snakes)
    else:
       return 'over'
@@ -204,9 +239,15 @@ def get_scores():
    scores=[]
    room = room_list[session.get('room')]
    if room != None:
+
+      logging.info('try to get score data, uuid: '+session['uuid'])
+      logging.debug('all player data: '+room['player'])
+
       for user in room['player']:
          scores.append({'uuid':user['uuid'],
                         'score':user['score']})
+
+      logging.debug('return data: '+scores)
       return jsonify(scores)
    else:
       return 'over'
@@ -217,11 +258,17 @@ def get_walls():
    if room != None:
       wall_data=[]
       user = [user for user in room['player'] if user['uuid'] == session['uuid']]
+
+      logging.info('try to get wall data, uuid: '+session['uuid'])
+      logging.debug('all wall: '+room['map']['walls'])
+
       if user['un_get_wall_count'] > 0:
          un_get_wall = room['map']['walls'][user['un_get_wall_count']:]
          for wall in un_get_wall:
             user['un_get_wall_count'] -= 1
             wall_data.append({'x':wall['x'],'y':wall['y']})
+
+         logging.debug('return data: '+wall_data)
          return jsonify(wall_data)
       else:
          return 'empty'
@@ -233,11 +280,17 @@ def get_apples():
    room = room_list[session.get('room')]
    print(room)
    if room != None:
+
+      logging.info('try to get apple data, uuid: '+session['uuid'])
+      logging.debug('all apples: '+room['map']['apples'])
+
       return jsonify(room['map']['apples'])
    else:
       return 'over'
 
 if __name__ == '__main__':
+   logging.basicConfig(format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
+                    level=logging.DEBUG)
    Timer(1,proc_room_1s).start()
-   app.run(debug=True)
+   app.run(debug=False)
    
