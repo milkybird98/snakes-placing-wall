@@ -29,8 +29,8 @@ class Game_model:
     flag = True
     while(flag):
       flag = False
-      head_x = random.randint(20,80)
-      head_y = random.randint(20,80)
+      head_x = random.randint(20+17,111-20)
+      head_y = random.randint(0+10,69-10)
       for player in self.players:
         snake_head = player['snake']['head']
         if abs(head_x - snake_head['x'])+abs(head_y - snake_head['y']) <= 15:
@@ -64,7 +64,7 @@ class Game_model:
 
     res = self._upload_snake()
     if res == 0:
-      return {'res':'suc','data':{'snake':self.user['snake']}}
+      return {'res':'suc','data':{'snake':self.user['snake'],'dire':direction}}
     elif res == -1:
       return {'res':'over','data':{'socre':self.user['score']}}
     elif res == 2:
@@ -74,6 +74,9 @@ class Game_model:
   def move_snake(self,direction):
     snake = self.user['snake']
     
+    mov_x=0
+    mov_y=0
+
     if direction == 'n':
       mov_x=0
       mov_y=-1
@@ -97,13 +100,11 @@ class Game_model:
     snake['head']['x'] += mov_x
     snake['head']['y'] += mov_y
 
-    print("moved success, direction = "+direction)
-
     res = self._upload_snake()
 
     if res == 'e':
       snake['len'] += 1
-      self.user['score'] += 50*(0.95 ** self.game_map['walls_count'])
+      self.user['score'] += 50#*(0.95 ** self.game_map['walls_count'])
       snake['body'].append(snake_tail)
       self.game_map['walls_count'] += 10
       return {'res':'eat','data':{'pos':snake_tail,'socre':self.user['score']}}
@@ -180,50 +181,64 @@ class Game_model:
 
     return {'res':'start','data':{}}
 
-
-
   def sync_world(self):
-    res = self._get_status()
-    if res == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
-    elif res == 2:
-      return {'res':'com_fai','data':{}}
+    url = self.server_url + "/sync"
+    score_data={'data':{'score':self.user['score']}}
+    res = self.req.post(url,json=score_data)
+    if res.status_code == 200:
+      if res.text == 'inerr':
+        return -2
+      elif res.text == 'clierr':
+        return -1
+      else:
+        res_data=res.json()
+        data=res_data.get('data')
+        if data == None:
+          return -2
+        
+        self.started_time = data['game_status'].get('time')
 
-    res = self._update_score()
-    if res == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
-    elif res == 2:
-      return {'res':'com_fai','data':{}}
-
-    res = self._get_score()
-    if res == -1 or self.started_time == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
-    elif res == 2:
-      return {'res':'com_fai','data':{}}
-
-    res = self._get_snake()
-    if res == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
-    elif res == 2:
-      return {'res':'com_fai','data':{}}
-
-    res = self._get_walls()
-    if res == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
-    elif res == 2:
-      return {'res':'com_fai','data':{}}
-
-    res = self._get_apples()
-    if res == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
-    elif res == 2:
-      return {'res':'com_fai','data':{}}
+        for player in data['scores']:
+            p = self._get_player(player['uuid'])
+            if p == None:
+              continue
+            p['score'] = player['score']
+        
+        for snake in data['snakes']:
+          player = self._get_player(snake['uuid'])
+          if player == None:
+            continue
+          player['snake']['body'] = snake['body']
+          player['snake']['len'] = snake['len']
+          player['snake']['head'] = snake['head']
 
 
+        print(data['wall_data'])
+
+        if data['wall_data'] == 'empty':
+          pass
+        else:
+          walls_data = data['wall_data']
+          if walls_data != None and len(walls_data) > 0:
+            for wall in walls_data:
+              if self.game_map['walls'].count(wall) > 0:
+                continue
+              self.game_map['walls'].append(wall)
+
+        if data['apples'] == 'empty':
+          pass
+        else:
+          apples_data = data['apples']
+          if apples_data != None and len(apples_data) > 0:
+            self.game_map['apples'].clear()
+            for apple in apples_data:
+              self.game_map['apples'].append(apple)
+              
+    else:
+      return 2
 
   def _update_score(self):
     url = self.server_url + "/update/score"
-    print("uploading score data")
     score_data={'data':{'score':self.user['score']}}
     res = self.req.post(url,json=score_data)
     if res.status_code == 200:
@@ -237,12 +252,10 @@ class Game_model:
 
   def _upload_snake(self):
     url = self.server_url + "/update/snake"
-    print("uploading snake data")
     snake_data = {}
     snake_data['head'] = self.user['snake']['head']
     snake_data['body'] = self.user['snake']['body']
     snake_data['len'] = self.user['snake']['len']
-    print(snake_data)
     res = self.req.post(url,json=snake_data)
     if res.status_code == 200:
       if res.text == 'eat':
@@ -259,7 +272,6 @@ class Game_model:
 
   def _uploading_wall(self,wall):
     url = self.server_url + "/update/wall"
-    print("uploading wall data")
     wall_data={}
     wall_data['wall']=wall
     res = self.req.post(url,json=wall_data)
@@ -302,7 +314,10 @@ class Game_model:
       res_data = res.json()
       if res_data != None and len(res_data) > 0:
         for player in res_data:
-          [p for p in self.players if p['uuid'] == player['uuid']][0]['score'] = player['score']
+            p = self._get_player(player['uuid'])
+            if p == None:
+              continue
+            p['score'] = player['score']
         return 0
       elif res.text == 'over':
         return -1
@@ -312,13 +327,14 @@ class Game_model:
 
   def _get_snake(self):
     url = self.server_url + "/get/snakes"
-    print("downloading snake data")
     res = self.req.get(url)
     if res.status_code == 200:
       snake_data = res.json()
       if snake_data != None:
         for snake in snake_data:
-          player = [player for pl in self.players if pl['uuid'] == snake['uuid']][0]
+          player = self._get_player(snake['uuid'])
+          if player == None:
+            continue
           player['snake']['body'] = snake['body']
           player['snake']['len'] = snake['len']
           player['snake']['head'] = snake['head']
@@ -331,38 +347,48 @@ class Game_model:
 
   def _get_walls(self):
     url = self.server_url + "/get/walls"
-    print("downloading wall data")
     res = self.req.get(url)
     if res.status_code == 200:
-      walls_data = res.json()
-      if walls_data != None and len(walls_data) > 0:
-        for wall in walls_data:
-          if self.game_map['walls'].conut(wall) > 0:
-            continue
-          self.game_map['walls'].append(wall)
-        return 0
-      elif res.text == 'empty':
+      if res.text == 'empty':
         return 0
       elif res.text == 'over':
         return -1
+      else:
+        walls_data = res.json()
+        walls_data != None and len(walls_data) > 0
+        for wall in walls_data:
+          if self.game_map['walls'].count(wall) > 0:
+            continue
+          self.game_map['walls'].append(wall)
+        return 0
     else:
       return 2
 
 
   def _get_apples(self): 
     url = self.server_url + "/get/apples"
-    print("downloading apple data")
     res = self.req.get(url)
     if res.status_code == 200:
-      apples_data = res.json()
-      if apples_data != None and len(apples_data) > 0:
-        self.game_map['apples'].clear()
-        for apple in apples_data:
-          self.game_map['apples'].append(apple)
-        return 0
-      elif res.text == 'empty':
+      if res.text == 'empty':
         return 0
       elif res.text == 'over':
         return -1
+      else:
+        apples_data = res.json()
+        if apples_data != None and len(apples_data) > 0:
+          self.game_map['apples'].clear()
+          for apple in apples_data:
+            self.game_map['apples'].append(apple)
+          return 0
+        else:
+          return 2
     else:
       return 2
+
+
+  def _get_player(self,uuid):
+    tar_player = [p for p in self.players if p['uuid'] == uuid]
+    if len(tar_player) > 0:
+      return tar_player[0]
+    else:
+      return None
