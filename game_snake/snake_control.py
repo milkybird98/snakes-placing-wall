@@ -132,33 +132,6 @@ class Game_control:
         self.view.draw_apples(apples)
 
 
-    def init_wall(self):
-        """初始化四周范围墙"""
-        column_start, column_end = 17, 112 
-        row = 70
-        
-        for x in range(column_start, column_end):
-            pos = {}
-            pos['x'] = x
-            pos['y'] = 0
-            self.client.game_map['walls'].append(pos)
-        for x in range(column_start, column_end):
-            pos = {}
-            pos['x'] = x
-            pos['y'] = row-1
-            self.client.game_map['walls'].append(pos)
-        for y in range(1, row):
-            pos = {}
-            pos['x'] = column_start
-            pos['y'] = y
-            self.client.game_map['walls'].append(pos)
-        for y in range(1, row):
-            pos = {}
-            pos['x'] = column_end-1
-            pos['y'] = y
-            self.client.game_map['walls'].append(pos)
-
-
     def show_board(self):
         """显示右侧信息板"""
         #分数
@@ -192,29 +165,30 @@ class Game_control:
 
     def game_start(self):
         """开始游戏界面"""
-        self.client.birth_snake()
-        self.init_wall()
+        self.client.join_game()
+        self.client.wait_game_start()
+        res = self.client.birth_snake()
         clock = pygame.time.Clock()
 
+        self.client.sync_world()
+
         #判断初始蛇头方向
-        h_x = self.client.user['snake']['head']['x']
-        h_y = self.client.user['snake']['head']['y']
-        body_init = self.client.user['snake']['body'][0]
-        b_x = body_init['x']
-        b_y = body_init['y']
-        if h_x == b_x and h_y < h_y:
+
+        if res['data']['dire'] == 1:
             self.direction = 'n'
-        elif h_x == b_x and h_y > b_y:
+        elif res['data']['dire'] == 3:
             self.direction = 's'
-        elif h_x < b_x and h_y == b_y:
-            self.direction = 'w'
-        elif h_x > b_x and h_y == b_y:
+        elif res['data']['dire'] == 2:
             self.direction = 'e'
+        elif res['data']['dire'] == 4:
+            self.direction = 'w'
    
         while self.flag_start:       
-            clock.tick(60)
+            clock.tick(10)
             self.view.draw_map_bg()
-            self.apple_pos()
+            #self.apple_pos()
+            self.snake_body_pos(self.client.user)
+            self.snake_head_pos(self.client.user)
             for player in self.client.players:
                 self.snake_body_pos(player)
                 self.snake_head_pos(player)
@@ -222,8 +196,9 @@ class Game_control:
             self.show_board()
 
             pygame.display.update()
-            self.check_events()  
+            self.check_events()
             self.client.move_snake(self.direction)
+            self.client.sync_world()
 
 
         
