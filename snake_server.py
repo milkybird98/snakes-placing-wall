@@ -10,6 +10,15 @@ app = Flask(__name__)
 app.config['SECRET_KEY']=os.urandom(24)
 game_data=[]
 
+# sub-routine for room status update operation per sencond 
+#
+# return:
+#        None
+#
+# sub-call:
+#        skip, for room not start;
+#        close_room, for room expire time;
+#        grow_apples, for grow a new apple in map
 def proc_room_1s():
    logging.debug('BEGIN preocess room')
    for room in game_data:
@@ -27,12 +36,14 @@ def proc_room_1s():
    Timer(1,proc_room_1s).start()
    logging.debug('END preocess room')
 
-
-def close_room_exe(room):
-   logging.info('room closed, player: ' + str(room['player']))
-   room.clear()
-   del(room)
-
+# function for check whether the new movements of one shake have eated an apple
+#
+# return:
+#        True, for the user's snake has eaten;
+#        False, for not
+#
+# sub-call:
+#        None
 def check_eat(room,user):
    if room['map']['apples'].count(user['snake']['head']) == 1:
       room['map']['apples'] = [apple for apple in room['map']['apples'] if not apple == user['snake']['head']]
@@ -41,6 +52,14 @@ def check_eat(room,user):
    else:
       return False
 
+# function for check whether the new movements of one snake have crashed the wall or other snakes
+#
+# return:
+#        True, for the snake died
+#        False, for the snake still be alive
+#
+# sub-call:
+#        None
 def check_crash(room,user):
    if room['map']['walls'].count(user['snake']['head']) == 1:
       user['snake']['len'] = -1
@@ -64,24 +83,103 @@ def check_crash(room,user):
       return True
    else:
       return False
+
+# generate the init wall around the whole map
+#
+# return:
+#        None
+#
+# sub-call:
+#        None
+def init_wall(room):
+   column_start, column_end = 17, 112 
+   row = 70
+   count = 0
    
+   for x in range(column_start, column_end):
+      pos = {}
+      pos['x'] = x
+      pos['y'] = 0
+      room['map']['walls'].append(pos)
+      count+=1
+
+   for x in range(column_start, column_end):
+      pos = {}
+      pos['x'] = x
+      pos['y'] = row-1
+      room['map']['walls'].append(pos)
+      count+=1
+
+   for y in range(1, row):
+      pos = {}
+      pos['x'] = column_start
+      pos['y'] = y
+      room['map']['walls'].append(pos)
+      count+=1
+
+   for y in range(1, row):
+      pos = {}
+      pos['x'] = column_end-1
+      pos['y'] = y
+      room['map']['walls'].append(pos)
+      count+=1
+
+   for user in room['player']:
+      user['un_get_wall_count'] += count
+
+# grow new apples in game map
+#
+# return:
+#        None
+#
+# sub-call:
+#        randint, for generate position of new apple
 def grow_apples(room):
    while(1):
-      x = random.randint(0,99)
-      y = random.randint(0,99)
-      if room['map']['walls'].count({'x':x,'y':y}) == 0:
-         for player in room['player']:
-            if player['snake']['body'].count({'x':x,'y':y}) > 0:
-               continue
-         room['map']['apples'].append({'x':x,'y':y})
-         break
-      continue
+      x = random.randint(18,111)
+      y = random.randint(1,69)
+
+      if room['map']['walls'].count({'x':x,'y':y}) > 0:
+         continue
+
+      for player in room['player']:
+         if player['snake']['body'].count({'x':x,'y':y}) > 0:
+            continue
+
+      room['map']['apples'].append({'x':x,'y':y})
+      break
    return
 
+# close game room actually operation
+#
+# return:
+#        None
+#
+# sub-call:
+#        None
+def close_room_exe(room):
+   logging.info('room closed, player: ' + str(room['player']))
+   room.clear()
+   room=None
+
+# close game room pre operation
+#
+# return:
+#        None
+#
+# sub-call:
+#        Timer, for exec the actually operation 10 senconds later
 def close_room(room):
    room['started'] = -1
-   Timer(10,close_room_exe).start()
+   Timer(10,close_room_exe,(room)).start()
 
+# start a new room for no rooms can join
+#
+# return:
+#        room_index, for the room that the caller has joined or created in room list
+#
+# sub-call:
+#        init_wall, for generate the walls around the game map
 def start_room(user):
    room = {}
    room['num_player'] = 1
@@ -95,13 +193,22 @@ def start_room(user):
    logging.info("new room create, index: " + str(room_index))
    return room_index
 
+# join a room
+#
+# return:
+#        None
+#
+# sub-call:
+#        None
 def join_room(room,user):
    room['num_player'] = room['num_player']+1
    if room['num_player'] == 2:
       logging.info("one room start game")
       room['started'] = 1
+      init_wall(room)
    room['player'].append(user)
 
+# join game by joining a room or creating a new room
 def join_game(user):
    for room in game_data:
       if room.get('started') == 0:
@@ -130,10 +237,102 @@ def make_session_permanent():
     session.permanent = True
     app.permanent_session_lifetime = timedelta(minutes=10)
 
+@app.route('/sync',methods = ['POST'])
+def sync_world():
+   res = check_player(session)
+   if res != 'fine':
+      return res
+   room = game_data[session.get('room')]
+
+   sync_data={}
+
+   if room != None: 
+      user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
+      user['score'] = request.json['data']['score']
+
+      logging.info('player score updated, uuid: ' + str(session['uuid'])+', score: ' + str(user['score']))
+      logging.debug('all player: ' + str(room['player']))
+   else:
+      return 'inerr'
+
+   game_status={}
+   if room != None: 
+      game_status['time'] = room['started']
+      logging.info('player get simple status, uuid: ' + str(session['uuid']))
+      logging.debug('status data: ' + str(game_status))
+      sync_data['game_status']=game_status
+   else:
+      return 'inerr'
+
+   scores=[]
+   if room != None:
+      logging.info('try to get score data, uuid: ' + str(session['uuid']))
+      logging.debug('all player data: ' + str(room['player']))
+
+      for user in room['player']:
+         scores.append({'uuid':user['uuid'],
+                        'score':user['score']})
+
+      logging.debug('return data: ' + str(scores))
+      sync_data['scores']=scores
+   else:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'inerr'
+
+   snakes=[]
+   if room != None:
+      logging.info('try to get snakes data, uuid: ' + str(session['uuid']))
+      logging.debug('all player data: ' + str(room['player']))
+
+      for user in room['player']:
+         snakes.append({'uuid':user['uuid'],
+                        'body':user['snake']['body'],
+                        'len':user['snake']['len'],
+                        'head':user['snake']['head']})
+
+      logging.debug('return data: ' + str(snakes))  
+      sync_data['snakes']=snakes
+
+   wall_data=[]
+   if room != None:
+      user = [user for user in room['player'] if user['uuid'] == session['uuid']][0]
+
+      logging.info('try to get wall data, uuid: ' + str(session['uuid']))
+      logging.debug('all wall: ' + str(room['map']['walls']))
+
+      if user['un_get_wall_count'] > 0:
+         un_get_wall = room['map']['walls'][-user['un_get_wall_count']:]
+         for wall in un_get_wall:
+            user['un_get_wall_count'] -= 1
+            wall_data.append({'x':wall['x'],'y':wall['y']})
+
+         logging.debug('return data: ' + str(wall_data))
+         sync_data['wall_data']=wall_data
+      else:
+         sync_data['wall_data']='empty'
+   else:
+      logging.warn('player not join room, uuid: ' + str(session['uuid']))
+      return 'inerr'
+
+   if room != None:
+
+      logging.info('try to get apple data, uuid: ' + str(session['uuid']))
+      logging.debug('all apples: ' + str(room['map']['apples']))
+
+      if len(room['map']['apples']) == 0:
+         sync_data['apples']='empty'
+      else:
+         sync_data['apples']=room['map']['apples']
+   else:
+      return 'inerr'
+
+   return jsonify({'res':'success','data':sync_data})
+   
+
 @app.route('/join/<name>')
 def reg_user(name):
    session['uuid'] = uuid.uuid1()
-   user = {'uuid':session['uuid'],'name':name,'score':0,'un_get_wall_count':0,'snake':{'body':[],'len':3,'head':{}}}
+   user = {'uuid':session['uuid'],'name':name,'score':0,'un_get_wall_count':0,'un_get_apple_count':0,'snake':{'body':[],'len':3,'head':{}}}
    room = join_game(user)
    session['room'] = room 
    logging.info('new player join server, uuid: ' + str(user['uuid'])+', name: ' + str(user['name']))
@@ -337,7 +536,7 @@ def get_apples():
 
 if __name__ == '__main__':
    logging.basicConfig(format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
-                    level=logging.INFO)
+                    level=logging.WARNING)
    Timer(1,proc_room_1s).start()
    app.run(debug=False)
    
