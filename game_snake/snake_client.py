@@ -233,8 +233,12 @@ class Game_model:
       elif res.text == 'clierr':
         return {'res':'cli_err','data':{}}
       else:
-        res_data=res.json()
-        data=res_data.get('data')
+        try:
+          res_data=res.json()
+          data=res_data.get('data')
+        except:
+          data = None
+
         if data == None:
           return {'res':'com_fal','data':{}}
         
@@ -356,8 +360,11 @@ class Game_model:
       elif res.text == 'clierr':
         return -2
       else:
-        res_data = res.json()
-        time = res_data.get('time')
+        try:
+          res_data = res.json()
+          time = res_data.get('time')
+        except:
+          time = None
 
         if time == None:
           return -1
@@ -388,7 +395,11 @@ class Game_model:
       elif res.text == 'clierr':
         return -2
       else:
-        res_data = res.json()
+        try:
+          res_data = res.json()
+        except:
+          res_data = None
+
         if res_data!= None and len(res_data) > 0:
           for player in res_data:
               p = self._get_player(player['uuid'])
@@ -415,7 +426,11 @@ class Game_model:
       elif res.text == 'clierr':
         return -2
       else:
-        snake_data = res.json()
+        try:
+          snake_data = res.json()
+        except:
+          snake_data = None
+
         if snake_data != None and len(snake_data) > 0:
           for snake in snake_data:
             player = self._get_player(snake['uuid'])
@@ -444,7 +459,11 @@ class Game_model:
       elif res.text == 'clierr':
         return -2
       else:
-        walls_data = res.json()
+        try:
+          walls_data = res.json()
+        except:
+          walls_data = None
+
         if walls_data != None and len(walls_data) > 0:
           for wall in walls_data:
             if self.game_map['walls'].count(wall) > 0:
@@ -472,7 +491,11 @@ class Game_model:
       elif res.text == 'clierr':
         return -2
       else:
-        apples_data = res.json()
+        try:
+          apples_data = res.json()
+        except:
+          apples_data = None
+          
         if apples_data != None and len(apples_data) > 0:
           self.game_map['apples'].clear()
           for apple in apples_data:
