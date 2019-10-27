@@ -61,18 +61,24 @@ class Game_model:
     self.user['snake']['len'] = 3
 
     print("snake birthed")
+    try:
+      res = self._upload_snake()
+    except:
+      return {'res':'net_err','data':{}}
 
-    res = self._upload_snake()
     if res == 0:
       return {'res':'suc','data':{'snake':self.user['snake'],'dire':direction}}
     elif res == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
+      return {'res':'ser_err','data':{}}
     elif res == 2:
       return {'res':'com_fai','data':{}}
 
       
   def move_snake(self,direction):
     snake = self.user['snake']
+
+    if snake['len'] == -1:
+      return {'res':'die','data':{'socre':self.user['score']}}
     
     mov_x=0
     mov_y=0
@@ -99,8 +105,10 @@ class Game_model:
 
     snake['head']['x'] += mov_x
     snake['head']['y'] += mov_y
-
-    res = self._upload_snake()
+    try:
+      res = self._upload_snake()
+    except:
+      return {'res':'net_err','data':{}}
 
     if res == 'e':
       snake['len'] += 1
@@ -114,12 +122,15 @@ class Game_model:
     elif res == 0:
       return {'res':'suc','data':{}}
     elif res == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
+      return {'res':'ser_err','data':{'socre':self.user['score']}}
     elif res == 2:
       return {'res':'com_fai','data':{}}
 
 
   def place_wall(self,direction):
+    if self.user['snake']['len'] == -1:
+      return {'res':'die','data':{'socre':self.user['score']}}
+
     if direction == 'n':
       mov_x=0
       mov_y=-2
@@ -139,11 +150,16 @@ class Game_model:
 
     wall = {'x':snake_h['x']+mov_x,'y':snake_h['y']+mov_y}
     self.game_map['walls'].append(wall)
-    res = self._uploading_wall(wall)
+
+    try:
+      res = self._uploading_wall(wall)
+    except:
+      return {'res':'net_fai','data':{}}
+
     if res == 0:
       return {'res':'suc','data':{'wall':wall}}
     elif res == -1:
-      return {'res':'over','data':{'socre':self.user['score']}}
+      return {'res':'inerr','data':{'socre':self.user['score']}}
     elif res == 2:
       return {'res':'com_fai','data':{}}
 
@@ -154,7 +170,11 @@ class Game_model:
   def join_game(self):
     url = self.server_url + "/join/" + self.user['name']
     print("joining game.")
-    res = self.req.get(url)
+    try:
+      res = self.req.get(url)
+    except:
+      return {'res':'net_fai','data':{}}
+
     if res.status_code == 200:
       print("join success")
       self.user['uuid'] = res.text
@@ -173,9 +193,13 @@ class Game_model:
 
   def wait_game_start(self):
     while(self.started_time == 0):
-      res = self._get_status()
+      try:
+        res = self._get_status()
+      except:
+        return {'res':'net_fai','data':{}}
+
       if res == -1:
-        return {'res':'over','data':{'socre':self.user['score']}}
+        return {'res':'inerr','data':{'socre':self.user['score']}}
       elif res == 2:
         return {'res':'com_fai','data':{}}
 
@@ -184,7 +208,11 @@ class Game_model:
   def sync_world(self):
     url = self.server_url + "/sync"
     score_data={'data':{'score':self.user['score']}}
-    res = self.req.post(url,json=score_data)
+    try:
+      res = self.req.post(url,json=score_data)
+    except:
+      return {'res':'net_err','data':{}}
+
     if res.status_code == 200:
       if res.text == 'inerr':
         return -2
@@ -235,7 +263,7 @@ class Game_model:
               self.game_map['apples'].append(apple)
               
     else:
-      return 2
+      return {'res':'com_fai','data':{}}
 
   def _update_score(self):
     url = self.server_url + "/update/score"
@@ -244,7 +272,7 @@ class Game_model:
     if res.status_code == 200:
       if res.text == 'success':
         return 0
-      elif res.text == 'over':
+      elif res.text == 'inerr':
         return -1
     else:
       return 2
@@ -256,6 +284,8 @@ class Game_model:
     snake_data['head'] = self.user['snake']['head']
     snake_data['body'] = self.user['snake']['body']
     snake_data['len'] = self.user['snake']['len']
+
+    
     res = self.req.post(url,json=snake_data)
     if res.status_code == 200:
       if res.text == 'eat':
@@ -264,7 +294,7 @@ class Game_model:
         return 'd'
       elif res.text == 'success':
         return 0
-      elif res.text == 'over':
+      elif res.text == 'inerr':
         return -1
     else:
       return 2
@@ -274,11 +304,15 @@ class Game_model:
     url = self.server_url + "/update/wall"
     wall_data={}
     wall_data['wall']=wall
-    res = self.req.post(url,json=wall_data)
+    try:
+      res = self.req.post(url,json=wall_data)
+    except:
+      return 1
+
     if res.status_code == 200:
       if res.text == 'success':
         self.game_map['walls_count'] -= 1
-      elif res.text == 'over':
+      elif res.text == 'inerr':
         return -1
     else:
       return 2
@@ -288,7 +322,11 @@ class Game_model:
     url = self.server_url + "/get/status"
     if self.started_time == 0:
       url = self.server_url + "/get/statusfull"
-    res = self.req.get(url)
+    try:
+      res = self.req.get(url)
+    except:
+      return 1
+
     if res.status_code == 200:
       res_data = res.json()
       if res_data != None:
@@ -301,7 +339,7 @@ class Game_model:
               player['score']=0
               self.players.append(player)
         return 0
-      elif res.text == 'over':
+      elif res.text == 'inerr':
         return -1
     else:
       return 2
@@ -309,7 +347,11 @@ class Game_model:
 
   def _get_score(self):
     url = self.server_url + "/get/scores"
-    res = self.req.get(url)
+    try:
+      res = self.req.get(url)
+    except:
+      return 1
+
     if res.status_code == 200:
       res_data = res.json()
       if res_data != None and len(res_data) > 0:
@@ -319,7 +361,7 @@ class Game_model:
               continue
             p['score'] = player['score']
         return 0
-      elif res.text == 'over':
+      elif res.text == 'inerr':
         return -1
     else:
       return 2
@@ -327,7 +369,11 @@ class Game_model:
 
   def _get_snake(self):
     url = self.server_url + "/get/snakes"
-    res = self.req.get(url)
+    try:
+      res = self.req.get(url)
+    except:
+      return 1
+
     if res.status_code == 200:
       snake_data = res.json()
       if snake_data != None:
@@ -339,7 +385,7 @@ class Game_model:
           player['snake']['len'] = snake['len']
           player['snake']['head'] = snake['head']
         return 0
-      elif res.text == 'over':
+      elif res.text == 'inerr':
         return -1
     else:
       return 2
@@ -347,11 +393,15 @@ class Game_model:
 
   def _get_walls(self):
     url = self.server_url + "/get/walls"
-    res = self.req.get(url)
+    try:
+      res = self.req.get(url)
+    except:
+      return 1
+
     if res.status_code == 200:
       if res.text == 'empty':
         return 0
-      elif res.text == 'over':
+      elif res.text == 'inerr':
         return -1
       else:
         walls_data = res.json()
@@ -367,11 +417,15 @@ class Game_model:
 
   def _get_apples(self): 
     url = self.server_url + "/get/apples"
-    res = self.req.get(url)
+    try:
+      res = self.req.get(url)
+    except:
+      return 1
+      
     if res.status_code == 200:
       if res.text == 'empty':
         return 0
-      elif res.text == 'over':
+      elif res.text == 'inerr':
         return -1
       else:
         apples_data = res.json()
