@@ -135,6 +135,9 @@ def init_wall(room):
 # sub-call:
 #        randint, for generate position of new apple
 def grow_apples(room):
+   if len(room['map']['apples']) > 50:
+      return
+
    while(1):
       x = random.randint(18,111)
       y = random.randint(1,69)
