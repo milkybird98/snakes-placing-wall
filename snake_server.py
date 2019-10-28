@@ -22,17 +22,25 @@ game_data=[]
 def proc_room_1s():
    logging.debug('BEGIN preocess room')
    for room in game_data:
+      if room == None:
+         continue
       if room['started']<=0:
          logging.debug('room not started, player: ' + str(room['player']))
          continue
-      room['started'] = room['started']+1
+
       if room['started'] > 600:
+         logging.debug('room game over, player: ' + str(room['player']))
+         close_room(room)
+      elif len(room['map']['walls']) > 1000 + 324:
          logging.debug('room game over, player: ' + str(room['player']))
          close_room(room)
       else:
          logging.debug('room run normally, player: ' + str(room['player']))
          grow_apples(room)
          logging.debug('all apples: ' + str(room['map']['apples']))
+
+      room['started'] = room['started']+1
+
    Timer(1,proc_room_1s).start()
    logging.debug('END preocess room')
 
@@ -65,7 +73,7 @@ def check_crash(room,user):
       user['snake']['len'] = -1
    
    for other_player in room['player']:
-      if other_player['snake']['body'].count(user['snake']['head']) == 1:
+      if other_player['snake']['len'] > 0 and other_player['snake']['body'].count(user['snake']['head']) == 1:
          user['snake']['len'] = -1
          break         
             
@@ -94,38 +102,31 @@ def check_crash(room,user):
 def init_wall(room):
    column_start, column_end = 17, 112 
    row = 70
-   count = 0
    
    for x in range(column_start, column_end):
       pos = {}
       pos['x'] = x
       pos['y'] = 0
       room['map']['walls'].append(pos)
-      count+=1
 
    for x in range(column_start, column_end):
       pos = {}
       pos['x'] = x
       pos['y'] = row-1
       room['map']['walls'].append(pos)
-      count+=1
 
    for y in range(1, row):
       pos = {}
       pos['x'] = column_start
       pos['y'] = y
       room['map']['walls'].append(pos)
-      count+=1
 
    for y in range(1, row):
       pos = {}
       pos['x'] = column_end-1
       pos['y'] = y
       room['map']['walls'].append(pos)
-      count+=1
 
-   for user in room['player']:
-      user['un_get_wall_count'] += count
 
 # grow new apples in game map
 #
@@ -163,7 +164,8 @@ def grow_apples(room):
 def close_room_exe(room):
    logging.info('room closed, player: ' + str(room['player']))
    room.clear()
-   room=None
+   room='empty'
+   return
 
 # close game room pre operation
 #
@@ -174,7 +176,7 @@ def close_room_exe(room):
 #        Timer, for exec the actually operation 10 senconds later
 def close_room(room):
    room['started'] = -1
-   Timer(10,close_room_exe,(room)).start()
+   Timer(10,close_room_exe,(room,)).start()
 
 # start a new room for no rooms can join
 #
@@ -191,6 +193,15 @@ def start_room(user):
    room['map']={}
    room['map']['apples']=[]
    room['map']['walls']=[]
+   init_wall(room)
+
+   for i in range(len(game_data)):
+      if game_data[i] == 'empty':
+         game_data[i] = room
+         room_index = i
+         logging.info("new room create, index: " + str(room_index))
+         return room_index
+
    game_data.append(room)
    room_index = game_data.index(room)
    logging.info("new room create, index: " + str(room_index))
@@ -208,7 +219,6 @@ def join_room(room,user):
    if room['num_player'] == 2:
       logging.info("one room start game")
       room['started'] = 1
-      init_wall(room)
    room['player'].append(user)
 
 # join game by joining a room or creating a new room
@@ -335,7 +345,7 @@ def sync_world():
 @app.route('/join/<name>')
 def reg_user(name):
    session['uuid'] = uuid.uuid1()
-   user = {'uuid':session['uuid'],'name':name,'score':0,'un_get_wall_count':0,'un_get_apple_count':0,'snake':{'body':[],'len':3,'head':{}}}
+   user = {'uuid':session['uuid'],'name':name,'score':0,'un_get_wall_count':0,'un_get_apple_count':0,'snake':{'body':[],'len':0,'head':{}}}
    room = join_game(user)
    session['room'] = room 
    logging.info('new player join server, uuid: ' + str(user['uuid'])+', name: ' + str(user['name']))
@@ -398,16 +408,24 @@ def update_wall():
    room = game_data[session.get('room')]
    if room != None: 
       wall = request.json['wall']
-      room['map']['walls'].append({'x':wall['x'],'y':wall['y']})
-      if room['map']['apples'].count({'x':wall['x'],'y':wall['y']}) > 0:
-         room['map']['apples'].remove({'x':wall['x'],'y':wall['y']})
+      if room['map']['walls'].count({'x':wall['x'],'y':wall['y']}) == 0:
 
-      logging.info('wall placed, uuid: ' + str(session['uuid'])+',x: ' + str(wall['x'])+',y: ' + str(wall['y']))
-      logging.debug('all wall: ' + str(room['map']['walls']))
+         room['map']['walls'].append({'x':wall['x'],'y':wall['y']})
+         if room['map']['apples'].count({'x':wall['x'],'y':wall['y']}) > 0:
+            room['map']['apples'].remove({'x':wall['x'],'y':wall['y']})
 
-      for user in room['player']:
-         user['un_get_wall_count'] += 1
-      return 'success'
+         logging.info('wall placed, uuid: ' + str(session['uuid'])+',x: ' + str(wall['x'])+',y: ' + str(wall['y']))
+         logging.debug('all wall: ' + str(room['map']['walls']))
+
+         if room['map']['walls'].count({'x':wall['x'],'y':wall['y']}) == 1:
+            for user in room['player']:
+               user['un_get_wall_count'] += 1
+         else:
+            return 'clierr'
+            
+         return 'success'
+      else:
+         return 'clierr'
    else:
       return 'inerr'
 
@@ -444,6 +462,8 @@ def get_status_f():
       for user in room['player']:
          game_status['player'].append({'uuid':user['uuid'],
                         'name':user['name']})
+
+      logging.warning(str(game_status['player']))
       logging.info('player get fullly status, uuid: ' + str(session['uuid']))
       logging.debug('status data: ' + str(game_status))
       return jsonify(game_status)
@@ -509,7 +529,7 @@ def get_walls():
       logging.debug('all wall: ' + str(room['map']['walls']))
 
       if user['un_get_wall_count'] > 0:
-         un_get_wall = room['map']['walls'][user['un_get_wall_count']:]
+         un_get_wall = room['map']['walls'][-user['un_get_wall_count']:]
          for wall in un_get_wall:
             user['un_get_wall_count'] -= 1
             wall_data.append({'x':wall['x'],'y':wall['y']})
