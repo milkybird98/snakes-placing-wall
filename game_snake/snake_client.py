@@ -32,9 +32,15 @@ class Game_model:
       head_x = random.randint(20+17,111-20)
       head_y = random.randint(0+10,69-10)
       for player in self.players:
-        snake_head = player['snake']['head']
+        snake_head = player['snake'].get('head')
+        if snake_head == None:
+          continue
+        if snake_head.get('x') == None:
+          continue
+
         if abs(head_x - snake_head['x'])+abs(head_y - snake_head['y']) <= 15:
           flag = True
+
       for wall in self.game_map['walls']:
         if abs(head_x - wall['x'])+abs(head_y - wall['y']) <= 7:
           flag = True
@@ -60,7 +66,6 @@ class Game_model:
 
     self.user['snake']['len'] = 3
 
-    print("snake birthed")
     try:
       res = self._upload_snake()
     except:
@@ -114,15 +119,14 @@ class Game_model:
 
     if res == 'e':
       snake['len'] += 1
-      self.user['score'] += 50#*(0.95 ** self.game_map['walls_count'])
       snake['body'].append(snake_tail)
       self.game_map['walls_count'] += 10
       return {'res':'eat','data':{'pos':snake_tail,'socre':self.user['score']}}
     elif res == 'd':
       snake['len'] = -1
-      return {'res':'die','data':{'socre':self.user['score']}}
+      return {'res':'die','data':{'pos':snake_tail,'socre':self.user['score']}}
     elif res == 0:
-      return {'res':'suc','data':{}}
+      return {'res':'suc','data':{'pos':snake_tail}}
     elif res == -1:
       return {'res':'ser_err','data':{}}
     elif res == -2:
@@ -134,6 +138,8 @@ class Game_model:
 
 
   def place_wall(self,direction):
+    if self.game_map['walls_count'] <= 0:
+      return {'res':'suc','data':{'wall':None}}
     if self.user['snake']['len'] == -1:
       return {'res':'die','data':{'socre':self.user['score']}}
 
@@ -163,9 +169,10 @@ class Game_model:
       return {'res':'net_err','data':{}}
 
     if res == 0:
+      self.user['score'] += 5
       return {'res':'suc','data':{'wall':wall}}
     elif res == -1:
-      return {'res':'inerr','data':{'socre':self.user['score']}}
+      return {'res':'inerr','data':{}}
     elif res == -2:
       return {'res':'cli_err','data':{}}
     elif res == 1:
@@ -179,14 +186,12 @@ class Game_model:
 
   def join_game(self):
     url = self.server_url + "/join/" + self.user['name']
-    print("joining game.")
     try:
       res = self.req.get(url)
     except:
       return {'res':'net_err','data':{}}
 
     if res.status_code == 200:
-      print("join success")
       self.user['uuid'] = res.text
       self.user['snake']={}
       self.user['score']=0
@@ -196,7 +201,6 @@ class Game_model:
       self.game_map['apples']=[]
       return {'res':'suc','data':{'uuid':self.user['uuid']}}
     else:
-      print("join fail")
       return {'res':'com_fai','data':{}}
 
 
@@ -217,7 +221,8 @@ class Game_model:
       elif res == 2:
         return {'res':'com_fai','data':{}}
 
-    return {'res':'start','data':{}}
+    return {'res':'suc','data':{}}
+
 
   def sync_world(self):
     url = self.server_url + "/sync"
@@ -257,9 +262,6 @@ class Game_model:
           player['snake']['body'] = snake['body']
           player['snake']['len'] = snake['len']
           player['snake']['head'] = snake['head']
-
-
-        print(data['wall_data'])
 
         if data['wall_data'] == 'empty':
           pass
@@ -337,6 +339,7 @@ class Game_model:
     if res.status_code == 200:
       if res.text == 'success':
         self.game_map['walls_count'] -= 1
+        return 0
       elif res.text == 'inerr':
         return -1
       elif res.text == 'clierr':
@@ -370,8 +373,7 @@ class Game_model:
           return -1
 
         self.started_time = time
-        if self.started_time == 0:
-          self.players.clear()
+        if self.started_time == 1:
           for player in res_data.get('player'):
             if player['uuid'] != self.user['uuid']:
               player['snake']={}
