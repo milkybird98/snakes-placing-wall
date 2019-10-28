@@ -12,6 +12,8 @@ class Register():
         self.window.title("Resigter")
         self.window.wm_attributes('-topmost',1)
         self.window.geometry('450x300')
+        #更改
+        self.state = 'normal'
 
         #获取屏幕尺寸以计算布局参数，使窗口居屏幕中央
         screenwidth = self.window.winfo_screenwidth()  
@@ -29,7 +31,8 @@ class Register():
         #创建并添加一个框架
         label_1 = Label(self.window, text="用户名：").place(x=100,y=150)
         self.name = StringVar()
-        entryName = Entry(self.window, textvariable=self.name).place(x=160,y=150)
+        #更改
+        entryName = Entry(self.window, textvariable=self.name, state=self.state).place(x=160,y=150)
         bt_exit = Button(self.window, text="退出", 
                          command=self.process_exit).place(x=280,y=230)
         bt_sign = Button(self.window, text="注册",
@@ -39,8 +42,18 @@ class Register():
         self.window.mainloop()
 
     def process_sign(self):
-        messagebox.showinfo('欢迎','注册成功')
-        self.user_name = self.name.get()
+        #更改
+        if self.name.get() != '':
+            text = Label(None, text='注册成功')
+            text.pack()
+            text.place(x=160,y=180)
+            self.user_name = self.name.get()
+            self.state = 'disable'
+            entryName = Entry(self.window, textvariable=self.name, state=self.state).place(x=160,y=150)
+        else:
+            text = Label(None, text='请输入用户名')
+            text.pack()
+            text.place(x=160,y=180)
 
     def process_exit(self):
         self.window.destroy()
