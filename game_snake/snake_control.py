@@ -284,12 +284,11 @@ class Game_control:
             else:
                 self.live = False
 
-            if flag == 0 and self.live:
-                if res['res'] == 'suc':
+            if flag == 0 and ( res['res'] == 'suc' or res['res'] == 'fdie' ):
                     self.view.draw_map_piece((res['data']['pos']['x'],res['data']['pos']['y']))
-                if res['res'] == 'suc' or res['res'] == 'eat':
-                    self.snake_body_pos(self.client.user,1)
-                    self.snake_head_pos(self.client.user,1)
+            if flag == 0 and self.live:
+                self.snake_body_pos(self.client.user,1)
+                self.snake_head_pos(self.client.user,1)
 
             for pos in self.player_b:
                 self.view.draw_map_piece(pos)

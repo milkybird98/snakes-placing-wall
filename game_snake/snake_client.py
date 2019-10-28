@@ -124,7 +124,7 @@ class Game_model:
       return {'res':'eat','data':{'pos':snake_tail,'socre':self.user['score']}}
     elif res == 'd':
       snake['len'] = -1
-      return {'res':'die','data':{'pos':snake_tail,'socre':self.user['score']}}
+      return {'res':'fdie','data':{'pos':snake_tail,'socre':self.user['score']}}
     elif res == 0:
       return {'res':'suc','data':{'pos':snake_tail}}
     elif res == -1:
