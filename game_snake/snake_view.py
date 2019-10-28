@@ -1,5 +1,8 @@
 import pygame 
+from pygame.sprite import Group 
+
 from snake_register import Register
+
 
 class Game_view:
     pygame.init()
@@ -15,13 +18,16 @@ class Game_view:
         self.scale = 10
         self.screen_rect = self.screen.get_rect()
         self.text_color = (255, 250, 250)#白色
-        self.font = pygame.font.SysFont(None, 48)
+        self.board_color = (105, 105, 105)
+        self.body_color = (102, 205, 0)
+        self.head_color = (255, 0, 0)
 
-        #无关紧要的颜色
-        self.white = (255, 250, 250)
-        self.green = (102, 205, 0)
-        self.red = (255, 0, 0)
-        self.blue = (100, 149, 237)
+        self.font = pygame.font.Font("font.ttf", 24)
+        self.wall_image = pygame.image.load('images/wall.png')
+        self.apple_image = pygame.image.load('images/apple.bmp')
+        self.map_image = pygame.image.load('images/map1.bmp')
+        self.end_image = pygame.image.load('images/end.bmp')
+        
 
 
     def scale_pos(self,pos):
@@ -36,30 +42,32 @@ class Game_view:
         """画出蛇头"""
         h_x, h_y = self.scale_pos(head)
         head_rect = pygame.Rect(h_x, h_y, self.scale, self.scale)
-        pygame.draw.rect(self.screen, self.red, head_rect)
+        pygame.draw.rect(self.screen, self.head_color, head_rect)
 
 
     def draw_snake_body(self, body):
         """画蛇身"""
         for pos in body:
+            #snake = Snake_body(self.screen, pos)
+            #self.body.add(snake)
+        #self.body.draw(self.screen)
+        #self.body.empty()
             b_x, b_y = self.scale_pos(pos)
             pos_rect = pygame.Rect(b_x, b_y, self.scale, self.scale)
-            pygame.draw.rect(self.screen, self.green, pos_rect)
+            pygame.draw.rect(self.screen, self.body_color, pos_rect)
 
 
     def draw_walls(self,walls):
         """墙体贴图"""
         for pos in walls:
-            w_x, w_y = self.scale_pos(pos)
-            wall_image = pygame.image.load('images/wall.bmp')
-            self.screen.blit(wall_image, (w_x, w_y))
+            w_x, w_y = self.scale_pos(pos)            
+            self.screen.blit(self.wall_image, (w_x, w_y))
 
     def draw_apples(self, apples):
         """贴苹果"""
         for pos in apples:
             a_x, a_y = self.scale_pos(pos)
-            apple_image = pygame.image.load('images/apple.bmp')
-            self.screen.blit(apple_image, (a_x, a_y))
+            self.screen.blit(self.apple_image, (a_x, a_y))
 
     def draw_bg_1(self):
         """登录注册界面"""
@@ -97,17 +105,45 @@ class Game_view:
         bg_3_image = pygame.image.load('images/bg_3.bmp')
         self.screen.blit(bg_3_image, (0,0))
 
-    def draw_map_bg(self):
-        """游戏背景地图界面"""
-        map_bg_image = pygame.image.load('images/map_bg.bmp')
-        self.screen.blit(map_bg_image, (0,0))
+    def draw_map_all(self):
+        """游戏背景整体地图界面"""
+        for x in range(17,112):
+            for y in range(70):
+                pos_m = self.scale_pos((x,y))
+                self.screen.blit(self.map_image, pos_m)
+
+    def draw_map_piece(self,pos):
+        """画一小块地图"""
+        if pos != None:
+            pos_m = self.scale_pos(pos)
+            self.screen.blit(self.map_image, pos_m)
 
 
-    def draw_text(self,text,pos_y):
+    def draw_board(self):
+        board = pygame.Rect(0, 0, 170, 700)
+        pygame.draw.rect(self.screen, self.board_color, board)
+
+
+    def draw_text(self,text,pos):
         """渲染文字, 并画出来"""
-        text_image = self.font.render(text, True, self.text_color)
+        x,y = pos
+        text_image = self.font.render(text, True, self.text_color, self.board_color)
         text_rect = text_image.get_rect()
-        text_rect.centerx = 172/2
-        text_rect.top = pos_y
+        text_rect.centerx = x
+        text_rect.top = y
         self.screen.blit(text_image, text_rect)
 
+
+    def draw_text_1(self,text,pos):
+        """结束文字"""
+        x,y = pos
+        text_image = self.font.render(text, True, self.text_color)
+        text_rect = text_image.get_rect()
+        text_rect.centerx = x
+        text_rect.top = y
+        self.screen.blit(text_image, text_rect)
+
+
+    def draw_end(self):
+        self.end_image.set_alpha(100)
+        self.screen.blit(self.end_image, (0,0))
