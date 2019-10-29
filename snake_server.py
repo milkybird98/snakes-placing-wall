@@ -6,6 +6,8 @@ import os
 import random
 import logging
 
+WIN_WALL_COUNT = 500
+
 app = Flask(__name__)
 app.config['SECRET_KEY']=os.urandom(24)
 game_data=[]
@@ -22,24 +24,26 @@ game_data=[]
 def proc_room_1s():
    logging.debug('BEGIN preocess room')
    for room in game_data:
-      if room == 'empty':
+      start_time = room.get('started')
+      if start_time == None:
          continue
-      if room['started']<=0:
+      print(start_time)
+      print(len(room['map']['walls'])-328)
+      if start_time<=0:
          logging.debug('room not started, player: ' + str(room['player']))
          continue
 
-      if room['started'] > 600:
+      if start_time == 600:
          logging.debug('room game over, player: ' + str(room['player']))
          close_room(room)
-      elif len(room['map']['walls']) > 1000 + 324:
-         logging.debug('room game over, player: ' + str(room['player']))
+      elif len(room['map']['walls']) > WIN_WALL_COUNT + 328:
+         logging.debug('room game finish, player: ' + str(room['player']))
          close_room(room)
       else:
          logging.debug('room run normally, player: ' + str(room['player']))
          grow_apples(room)
          logging.debug('all apples: ' + str(room['map']['apples']))
-
-      room['started'] = room['started']+1
+         room['started'] = start_time + 1
 
    Timer(1,proc_room_1s).start()
    logging.debug('END preocess room')
@@ -136,7 +140,7 @@ def init_wall(room):
 # sub-call:
 #        randint, for generate position of new apple
 def grow_apples(room):
-   if len(room['map']['apples']) > 50:
+   if len(room['map']['apples']) > 30:
       return
 
    while(1):
@@ -164,7 +168,6 @@ def grow_apples(room):
 def close_room_exe(room):
    logging.info('room closed, player: ' + str(room['player']))
    room.clear()
-   room='empty'
    return
 
 # close game room pre operation
@@ -216,7 +219,7 @@ def start_room(user):
 #        None
 def join_room(room,user):
    room['num_player'] = room['num_player']+1
-   if room['num_player'] == 2:
+   if room['num_player'] == 4:
       logging.info("one room start game")
       room['started'] = 1
    room['player'].append(user)
@@ -225,7 +228,7 @@ def join_room(room,user):
 def join_game(user):
    for room in game_data:
       if room.get('started') == 0:
-         if room.get('num_player') < 2:
+         if room.get('num_player') < 4:
             join_room(room,user)
             return game_data.index(room)
    else:
@@ -561,5 +564,8 @@ if __name__ == '__main__':
    logging.basicConfig(format='%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s',
                     level=logging.WARNING)
    Timer(1,proc_room_1s).start()
-   app.run(debug=False)
+   try:
+      app.run(debug=False)
+   except:
+      pass
    

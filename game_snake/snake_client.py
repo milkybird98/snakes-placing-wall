@@ -5,6 +5,7 @@ import copy
 import logging
 
 class Game_model:
+  WIN_WALL_COUNT = 500
   server_url=""
   user={}
   players=[]
@@ -120,7 +121,7 @@ class Game_model:
     if res == 'e':
       snake['len'] += 1
       snake['body'].append(snake_tail)
-      self.game_map['walls_count'] += 10
+      self.game_map['walls_count'] += (5 + random.randint(0,5))
       return {'res':'eat','data':{'pos':snake_tail,'socre':self.user['score']}}
     elif res == 'd':
       snake['len'] = -1
@@ -157,7 +158,7 @@ class Game_model:
       mov_y=0
 
     snake_h = self.user['snake']['head']
-    if snake_h['x'] < 2 or  snake_h['x'] > 97 or snake_h['x'] <2 or snake_h['y'] > 97:
+    if snake_h['x'] < 20+2 or  snake_h['x'] > 111-2 or snake_h['x'] <2 or snake_h['y'] > 69-2:
       return {'res':'fal','data':{}}
 
     wall = {'x':snake_h['x']+mov_x,'y':snake_h['y']+mov_y}
@@ -350,8 +351,11 @@ class Game_model:
 
   def _get_status(self):
     url = self.server_url + "/get/status"
+    flag_full = False
+
     if self.started_time == 0:
       url = self.server_url + "/get/statusfull"
+      flag_full = True
     try:
       res = self.req.get(url)
     except:
@@ -373,7 +377,7 @@ class Game_model:
           return -1
 
         self.started_time = time
-        if self.started_time == 1:
+        if self.started_time == 1 and flag_full:
           for player in res_data.get('player'):
             if player['uuid'] != self.user['uuid']:
               player['snake']={}
