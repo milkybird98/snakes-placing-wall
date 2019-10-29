@@ -22,7 +22,7 @@ game_data=[]
 def proc_room_1s():
    logging.debug('BEGIN preocess room')
    for room in game_data:
-      if room == None:
+      if room == 'empty':
          continue
       if room['started']<=0:
          logging.debug('room not started, player: ' + str(room['player']))
