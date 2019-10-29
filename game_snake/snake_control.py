@@ -281,7 +281,7 @@ class Game_control:
         elif h_x > b_x and h_y == b_y:
             self.direction = 'e'
    
-        while self.flag_start:  
+        while True:  
             clock.tick(60)
             temp += 1
             flag = temp % 5
@@ -289,10 +289,10 @@ class Game_control:
 
             
             self.check_events()
-            if flag_sync == 0:
+            if self.flag_start and flag_sync == 0:
                 self.client.sync_world()
 
-            if flag == 0:
+            if self.flag_start and flag == 0:
                 self.client._get_status()
             
             if self.client.started_time < 0:
@@ -301,20 +301,20 @@ class Game_control:
             if len(self.client.game_map['walls']) > self.client.WIN_WALL_COUNT:
                 self.flag_start = False
             
+            if self.flag_start:
+                #蛇死亡判断
+                lens = self.client.user['snake']['len']
+                if lens >= 0:
+                    self.live = True
+                else:
+                    self.live = False
 
-            #蛇死亡判断
-            lens = self.client.user['snake']['len']
-            if lens >= 0:
-                self.live = True
-            else:
-                self.live = False
+                if self.live and flag == 0 and self.place_wall:
+                    self.client.place_wall(self.wall_dir)
+                if self.live and flag == 0:
+                    res = self.client.move_snake(self.direction)
 
-            if self.live and flag == 0 and self.place_wall:
-                self.client.place_wall(self.wall_dir)
-            if self.live and flag == 0:
-                res = self.client.move_snake(self.direction)
-
-            self.apple_pos()
+                self.apple_pos()
 
             ##===========
             if self.live == False:
@@ -322,25 +322,28 @@ class Game_control:
                 self.init_wall()
                 self.view.draw_board()
 
-            if flag == 0 and ( res['res'] == 'suc' or res['res'] == 'fdie' ):
-                    self.view.draw_map_piece((res['data']['pos']['x'],res['data']['pos']['y']))
-            if flag == 0 and self.live:
-                self.snake_body_pos(self.client.user,1)
-                self.snake_head_pos(self.client.user,1)
+            if self.flag_start:
 
-            for pos in self.player_b:
-                self.view.draw_map_piece(pos)
-            self.player_b.clear()
+                if flag == 0 and ( res['res'] == 'suc' or res['res'] == 'fdie' ):
+                        self.view.draw_map_piece((res['data']['pos']['x'],res['data']['pos']['y']))
+                if flag == 0 and self.live:
+                    self.snake_body_pos(self.client.user,1)
+                    self.snake_head_pos(self.client.user,1)
 
-            for player in self.client.players:
-                if player['snake']['len'] > 2:
-                    self.snake_body_pos(player,2)
-                    self.snake_head_pos(player,2)
+                for pos in self.player_b:
+                    self.view.draw_map_piece(pos)
+                self.player_b.clear()
 
-            self.walls_pos() 
-            #==============
-            self.view.draw_board()
-            self.show_board()
+                for player in self.client.players:
+                    if player['snake']['len'] > 2:
+                        self.snake_body_pos(player,2)
+                        self.snake_head_pos(player,2)
+
+                self.walls_pos() 
+
+                #==============
+                self.view.draw_board()
+                self.show_board()
 
             #============
             if self.live == False:
